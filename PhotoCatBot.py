@@ -108,12 +108,12 @@ class PhotoCatFixer:
         '|North Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode Island'
         '|South Carolina|South Dakota|Tennessee|Texas|Utah|Virginia|Washington'
         '|West Virginia|Wisconsin|Wyoming'
-        '|Afghanistan|Africa|Argentina|Australia|Bangladesh|Belgium|Bolivia'
+        '|Afghanistan|Africa|Argentina|Australia|Bangladesh|Belgium|Bolivia|Bulgaria'
         '|Cambodia|Canada|Chile|Cornwall|Croatia|Cuba|Cyprus|Devon|Egypt'
-        '|England|Finland|France|Ghana|Greece|Hungary|Iceland|India|Indonesia'
+        '|England|Finland|France|Ghana|Greece|Haiti|Hungary|Iceland|India|Indonesia'
         '|Iraq|Iran|Israel|Italy|Japan|Korea|Kuwait|Lebanon|Lithuania|London'
-        '|Mongolia|Montenegro|New Zealand|Nigeria|Norway|Ottawa|Pakistan'
-        '|Poland|Portugal|Romania|Russia|Slovakia|Somalia|Spain|Sri Lanka|Surrey'
+        '|Mongolia|Montenegro|New Zealand|Nigeria|Norway|Nottinghamshire|Oman|Ottawa|Pakistan'
+        '|Poland|Portugal|Romania|Russia|Sheffield|Slovakia|Somalia|Spain|Sri Lanka|Surrey'
         '|Sweden|Syria|Taiwan|Tibet|Turkey|Vancouver|Venezuela|Vietnam|Yorkshire)'
         r'\s*(\||$)')
 
@@ -138,8 +138,10 @@ class PhotoCatFixer:
     #
     subject_map = {
         'WikiProject Albums':           'albums',
+        'WikiProject Alternative music': 'music',
         'WikiProject Agriculture':      'agricultural topics',
         'WikiProject Amateur radio':    'amateur radio' ,
+        'WikiProject Anglicanism':      'religious subjects',
         'WikiProject Architecture':     'architecture',
         'WikiProject Aquarium Fishes':  'fish',
         'WikiProject Automobiles':      'cars',
@@ -160,6 +162,7 @@ class PhotoCatFixer:
         'WikiProject Christian music':  'music',
         'WikiProject Classical music':  'music',
         'WikiProject College football': 'American football people',
+        'WikiProject Computing':        'computing equipment',
         'WikiProject Country Music':    'music',
         'WikiProject Companies':        'business & economic topics',
         'WikiProject Cricket':          'cricket',
@@ -184,6 +187,7 @@ class PhotoCatFixer:
         'WikiProject Guitarists':       'musicians',
         'WikiProject Gymnastics':       'gymnastics',
         'WikiProject Horse racing':     'equestrians',
+        'WikiProject Hospitals':        'hospitals',
         'WikiProject International relations': 'political topics',
         'WikiProject Jazz':             'music',
         'WikiProject Judaism':          'religious subjects',
@@ -200,6 +204,7 @@ class PhotoCatFixer:
         'WikiProject Musical Instruments': 'musical instruments',
         'WikiProject Military history': 'military history',
         'WikiProject Mythology':        'mythology subjects',
+        'WikiProject Neopaganism':      'religious subjects',
         'WikiProject Newspapers':       'publications',
         'WikiProject Olympics':         'sports and games',
         'WikiProject Opera':            'music',
@@ -208,6 +213,8 @@ class PhotoCatFixer:
         'WikiProject Physics':          'physics subjects',
         'WikiProject Pinball':          'games',
         'WikiProject Politics':         'political topics',
+        'WikiProject Pop music':        'music',
+        'WikiProject Pritzker-GLAM':    'military history',
         'WikiProject Professional wrestling': 'professional wrestling performers',
         'WikiProject Punk music':       'music',
         'WikiProject R&B and Soul Music': 'music', 
@@ -243,6 +250,8 @@ class PhotoCatFixer:
         'WikiProject Burma (Myanmar)':    'Burma',
         'WikiProject Central Asia':       'Asia',
         'WikiProject Chicago':            'Chicago, Illinois',
+        'WikiProject Cleveland':          'Cleveland, Ohio',
+        'WikiProject Education in the United Kingdom': 'the United Kingdom',
         'WikiProject Houston':            'Houston, Texas',
         'WikiProject Micronesia':         'the Federated States of Micronesia',
         'WikiProject Music of the United Kingdom': 'the United Kingdom',
@@ -253,7 +262,6 @@ class PhotoCatFixer:
         'WikiProject U.S. Congress':      'Washington, D.C.',
         'WikiProject UK Roads':           'the United Kingdom',
         'WikiProject United Kingdom':     'the United Kingdom',
-        'WikiProject WikiAfrica':         'Africa',
         }
     
     custom_map = {
@@ -314,8 +322,10 @@ class PhotoCatFixer:
         'WikiProject Musical Theatre':           'imageneeded',
         'WikiProject New York City':             'image-needed',
         'WikiProject Nickelodeon':               'needs-image',
+        'WikiProject National Football League':  'needs-image',
         'WikiProject Novels':                    'needs-infobox-cover',
         'WikiProject Plants':                    'needs-photo',
+        'WikiProject Politics of the United Kingdom': 'needs-picture',
         'WikiProject Primates':                  'needs-photo',
         'WikiProject Russia':                    'imageneeded',
         'WikiProject Singapore':                 'imagerequest',
@@ -556,6 +566,7 @@ class PhotoCatBot:
         '|photo'
         '|photo ?req'
         '|photo(graph)? requested'
+        '|reqp'
         '|req ?image'
         '|request image'
         '|req[ -]?photo'
