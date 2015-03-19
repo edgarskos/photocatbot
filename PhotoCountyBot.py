@@ -5,18 +5,40 @@
 # Walk through [[Category:Wikipedia requested photographs in <state>]],
 # looking for articles that can be reclassified into subcategories.
 
-import wikipedia, catlib, pagegenerators
 import time
 import re
 import getopt, sys
+import os
+
 import county_map
+import pywikibot
+from pywikibot import pagegenerators
 
 # These strings are used to find a starting category to crawl
 # and a pattern to look for.  The location specified on the command
 # line will be substituted into both.
 #
 startCat = 'Category:Wikipedia requested photographs in %s'
-photoReqPatStr = r'{{(reqphoto|photoreq|photo|picture|image *request|image *requested|reqimage|photo *needed)([^}]*)in[=|]%s}}'
+
+# This pattern matches photo request templates of the form
+# {{image requested|in=Foobar}} (and which use *no* other parameters).
+photoReqPatStr = (
+    '{{(picreq'
+    '|image request(?:ed)?'
+    '|images? needed'
+    '|photo'
+    '|photoreq'
+    '|photo(?:graph)? requested'
+    '|picture needed'
+    '|reqp'
+    '|reqimage'
+    '|req photograph'
+    '|reqphoto(?:graph)?'
+    '|requested photograph'
+    '|needs image)'
+    r'([^}]*)in[=|]%s}}'
+)
+
 photoReqPat = ''
 
 global debug
@@ -50,23 +72,23 @@ def main():
         print "required argument 'location' missing"
         sys.exit(2)
 
-    site = wikipedia.getSite()
-    cat = catlib.Category(site, startCat)
+    site = pywikibot.getSite()
+    cat = pywikibot.Category(site, startCat)
     gen = pagegenerators.CategorizedPageGenerator(cat)
     for page in gen:
-        if process_page(page, state):
+        if process_page(site, page, state):
             time.sleep(30)
 
-def process_page(page, state):
+def process_page(site, page, state):
     global photoReqPat
     global debug
 
     if (page.title().find("Talk:") == 0):
         talk = page
-        article = wikipedia.Page(None, page.title().replace("Talk:","",1))
+        article = pywikibot.Page(site, page.title().replace("Talk:","",1))
     else:
         article = page
-        talk = wikipedia.Page(None, "Talk:" + page.title())
+        talk = pywikibot.Page(site, "Talk:" + page.title())
 
     try:
         text = article.get()
@@ -89,8 +111,8 @@ def process_page(page, state):
 
     if county:
         talktext = talk.get()
-        newtext = photoReqPat.sub(r'{{reqphoto|\2in=%s}}' % county, talktext)
-        newtext = re.sub(r'{{reqphoto\|\|+', r'{{reqphoto|', newtext)
+        newtext = photoReqPat.sub(r'{{image requested|\2in=%s}}' % county, talktext)
+        newtext = re.sub(r'{{image requested\|\|+', r'{{image requested|', newtext)
     else:
         print "couldn't guess at %s" % page.title()
         return False
@@ -102,15 +124,14 @@ def process_page(page, state):
         print "nothing to do for %s" % page.title()
         return False
     else:
-        if debug:
-            print "Debug: %s" % page.title()
-            print newtext
-        else:
+        log(page.title())
+        log(newtext)
+        if not debug:
             try:
                 talk.put(newtext, 'moving to [[Category:Wikipedia requested photographs in %s]] by the [[User:PhotoCatBot|PhotoCat]]' % county)
-                maybe_create_category(county, state)
+                maybe_create_category(county, state, site)
                 return True
-            except wikipedia.LockedPage:
+            except pywikibot.LockedPage:
                 return False
 
 def guess_county(text, state):
@@ -133,23 +154,26 @@ def guess_county(text, state):
         exactlink = link.split('|')[0]
         county = find_county_in_text(exactlink, state)
         if county:
+            log("guess_county: found '{}' in link [[{}]]".format(county, exactlink))
             return county
         county = cm.lookup(exactlink)
         if county:
+            log("guess_county: found '{}' from looking up link [[{}]]".format(county, exactlink))
             return county
 
 def find_county_in_text(text, state):
     m = re.search(' *([^,(]* County, %s)$' % state, text)
     if m:
+        log("find_county_in_text: found {}".format(m.group(1)))
         return m.group(1)
     return False
 
-def maybe_create_category(county, state):
+def maybe_create_category(county, state, site):
     cat = 'Category:Wikipedia requested photographs in %s' % county
-    catpage = wikipedia.Page(None, cat)
+    catpage = pywikibot.Page(site, cat)
     try:
         text = catpage.get()
-    except wikipedia.NoPage:
+    except pywikibot.NoPage:
         catpage.put("""{{US image sources}}
 {{howtoreqphotoin|%s}}
 <br clear=all />
@@ -157,8 +181,14 @@ def maybe_create_category(county, state):
 [[Category:Wikipedia requested photographs in %s|%s]]""" % (county, state, county))
         print 'created category [[%s]]' % cat
 
-try:
-    main()
-finally:
-    wikipedia.stopme()
+def log(msg):
+    if debug:
+        script = os.path.basename(__file__)
+        print "{}: {} {}".format(script, time.asctime(), msg)
+
+if __name__ == '__main__':
+    try:
+        main()
+    finally:
+        pywikibot.stopme()
 
