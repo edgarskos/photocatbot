@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-import getopt
+import argparse
 import re
 import sys
 import time
@@ -550,7 +550,7 @@ class PhotoCatFixer:
 class PhotoCatBot:
     # class constants
 
-    startCategory = 'Category:Wikipedia requested photographs'
+    defaultCategory = 'Wikipedia requested photographs'
     editComment = ('cleanup for the [[User:Twp/Drafts/WikiProject Photo'
                    ' Requests|Photo Request WikiProject]], by the'
                    ' [[User:PhotoCatBot|PhotoCat]]')
@@ -577,40 +577,54 @@ class PhotoCatBot:
         r'\s*\|?[^{}]*}}',
         re.I)
 
-    def main(self):
+    def main(self, argv):
         debug = False
-        try:
-            opts, args = getopt.getopt(sys.argv[1:], 'dc:', ['debug', 'category'])
-        except getopt.GetoptError, err:
-            # print help information and exit:
-            print str(err) # will print something like "option -a not recognized"
-            sys.exit(2)
-        for o, a in opts:
-            if o in ('-d', '--debug'):
-                debug = True
-            if o in ('-c', '--cat', '--category'):
-                startCat = o
+
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--debug', '-d',
+                            help='enable debugging output',
+                            action='store_true')
+        parser.add_argument(
+            '--category', '--cat', '-c',
+            help='specify starting category (defaults to "{}")'.format(
+                PhotoCatBot.defaultCategory),
+            default=PhotoCatBot.defaultCategory
+        )
+        parser.add_argument('--repeat', '-r',
+                            help='number of minutes in which to repeat',
+                            type=int)
+        parser.add_argument('pages',
+                            help='List of page titles to process',
+                            nargs=argparse.REMAINDER)
+
+        args = parser.parse_args(argv[1:])
 
         site = pywikibot.getSite()
-        cat = pywikibot.Category(site, PhotoCatBot.startCategory)
 
-        if args:
-            for title in args:
-                page = pywikibot.Page(site, title.decode('utf-8'))
+        while True:
+            if args.pages:
+                pagegen = pagegenerators.PagesFromTitlesGenerator(args.pages)
+            else:
+                cat = pywikibot.Category(site, 'Category:' + args.category)
+                pagegen = pagegenerators.CategorizedPageGenerator(cat)
+
+            for page in pagegen:
                 photo_fixer = PhotoCatFixer(site, page, debug)
                 photo_fixer.handle_article()
-        else:
-            gen = pagegenerators.CategorizedPageGenerator(cat)
-            for page in gen:
-                photo_fixer = PhotoCatFixer(site, page, debug)
-                photo_fixer.handle_article()
 
-def main():
+            if args.repeat:
+                nextrun = args.repeat * 60
+                print "Next run in {} seconds...".format(nextrun)
+                time.sleep(nextrun)
+            else:
+                break
+
+def main(argv):
     try:
         bot = PhotoCatBot()
-        bot.main()
+        bot.main(argv)
     finally:
         pywikibot.stopme()
 
 if __name__ == '__main__':
-    main()
+    main(sys.argv)
