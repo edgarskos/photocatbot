@@ -399,6 +399,7 @@ class PhotoCatFixer:
                 pywikibot.showDiff(text, newtext)
             else:
                 try:
+                    self._site.tokens._tokens.clear()  # https://phabricator.wikimedia.org/T61678
                     self._article.toggleTalkPage().put(newtext, PhotoCatBot.editComment)
                     time.sleep(30)
                 except pywikibot.LockedPage:
