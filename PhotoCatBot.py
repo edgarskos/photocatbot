@@ -555,27 +555,9 @@ class PhotoCatFixer:
 
 class PhotoCatBot(pywikibot.bot.Bot):
 
-    # This pattern matches unqualified photo request templates.
-    # TODO: instead, replace any template for which
-    #       tmpl.is_photo_request() is true.
-    photoReplacePattern = re.compile(
-        '{{(PicRequest'
-        '|image ?req'
-        '|image request(ed)?'
-        '|images? needed'
-        '|photo'
-        '|photo ?req'
-        '|photo(graph)? requested'
-        '|reqp'
-        '|req ?image'
-        '|request image'
-        '|req[ -]?photo'
-        '|request photo'
-        '|requested picture'
-        '|needimages'
-        '|needs image)'
-        r'\s*\|?[^{}]*}}',
-        re.I)
+    def __init__(self, debug=False, **kwargs):
+        self.debug = debug
+        super(PhotoCatBot, self).__init__(**kwargs)
 
     def treat(self, page):
         photo_fixer = PhotoCatFixer(self.site, page, self.debug)
@@ -603,14 +585,15 @@ def main(argv):
     site = pywikibot.Site()
 
     while True:
+        # Select an appropriate page generator based on the --category
+        # argument and/or positional 'page' arguments
         if args.pages:
             pagegen = pagegenerators.PagesFromTitlesGenerator(args.pages)
         else:
             cat = pywikibot.Category(site, 'Category:' + args.category)
             pagegen = pagegenerators.CategorizedPageGenerator(cat)
 
-        bot = PhotoCatBot(generator=pagegen)
-        bot.debug = args.debug
+        bot = PhotoCatBot(generator=pagegen, debug=args.debug)
         bot.run()
 
         if args.repeat:
