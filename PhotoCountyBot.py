@@ -51,109 +51,6 @@ photoReqPat = ''
 
 global debug
 
-class PhotoCountyBot(pywikibot.bot.Bot):
-    def __init__(self, state, **kwargs):
-        self.state = state
-        super(PhotoCountyBot, self).__init__(**kwargs)
-
-    def treat(self, page):
-        process_page(self.site, page, self.state)
-
-
-def main():
-    global startCat
-    global photoReqPat
-    global debug
-    debug = False
-    state = False
-    try:
-        opts, args = getopt.getopt(
-                        sys.argv[1:],
-                        "dp:l:",
-                        ["debug", "place=", "location="]
-                        )
-    except getopt.GetoptError, err:
-        # print help information and exit:
-        print str(err) # will print something like "option -a not recognized"
-        sys.exit(2)
-    for o, a in opts:
-        if o in ('-d', '--debug'):
-            debug = True
-        if o in ('-p', '--place', '-l', '--location'):
-            state = a
-
-    if state:
-        startCat = startCat % state
-        photoReqPat = re.compile(photoReqPatStr % state, re.I)
-    else:
-        print "required argument 'location' missing"
-        sys.exit(2)
-
-    site = pywikibot.Site()
-    cat = pywikibot.Category(site, startCat)
-    gen = pagegenerators.CategorizedPageGenerator(cat)
-    bot = PhotoCountyBot(state=state, generator=gen)
-    bot.run()
-
-def process_page(site, page, state):
-    global photoReqPat
-    global debug
-
-    if page.isTalkPage():
-        article = page.toggleTalkPage()
-        talk = page
-    else:
-        article = page
-        talk = page.toggleTalkPage()
-
-    try:
-        text = article.get()
-    except KeyboardInterrupt:
-        raise
-    except:
-        print "%s error thrown by %s" % (sys.exc_info()[0], article.title())
-        return False
-
-    newtext = False
-
-    # Try finding a county by:
-    #   - looking up the article title in the county map
-    #   - looking for a county given explicitly in the article title
-    #   - searching the text of the first paragraph for a related town
-
-    # cm = county_map.county_map()
-    # county = cm.lookup(article.title())
-    county = lookup_county(article.title(), site)
-    if not county:
-        county = find_county_in_text(page.title(), state)
-    if not county:
-        county = guess_county(text, state)
-
-    if county:
-        talktext = talk.get()
-        newtext = photoReqPat.sub(r'{{image requested|\2in=%s}}' % county, talktext)
-        newtext = re.sub(r'{{image requested\|\|+', r'{{image requested|', newtext)
-    else:
-        print "couldn't guess at %s" % page.title()
-        return False
-
-    if not newtext:
-        print "something friggin weird happened on %s" % article.title()
-        return False
-    elif newtext == talktext:
-        print "nothing to do for %s" % page.title()
-        return False
-    else:
-        log(page.title())
-        log(newtext)
-        if not debug:
-            try:
-                talk.put(newtext, 'moving to [[Category:Wikipedia requested photographs in %s]] by the [[User:PhotoCatBot|PhotoCat]]' % county)
-                maybe_create_category(county, state, site)
-                return True
-            except pywikibot.LockedPage:
-                return False
-
 def guess_county(text, state):
     cm = county_map.county_map()
 
@@ -235,6 +132,106 @@ def log(msg):
     if debug:
         script = os.path.basename(__file__)
         print "{}: {} {}".format(script, time.asctime(), msg)
+
+
+class PhotoCountyBot(pywikibot.bot.Bot):
+    def __init__(self, state, **kwargs):
+        self.state = state
+        super(PhotoCountyBot, self).__init__(**kwargs)
+
+    def treat(self, page):
+        global photoReqPat
+        global debug
+
+        if page.isTalkPage():
+            article = page.toggleTalkPage()
+            talk = page
+        else:
+            article = page
+            talk = page.toggleTalkPage()
+
+        try:
+            text = article.get()
+        except KeyboardInterrupt:
+            raise
+        except:
+            print "%s error thrown by %s" % (sys.exc_info()[0], article.title())
+            return
+
+        newtext = False
+
+        # Try finding a county by:
+        #   - looking up the article title in the county map
+        #   - looking for a county given explicitly in the article title
+        #   - searching the text of the first paragraph for a related town
+
+        # cm = county_map.county_map()
+        # county = cm.lookup(article.title())
+        county = lookup_county(article.title(), self.site)
+        if not county:
+            county = find_county_in_text(page.title(), self.state)
+        if not county:
+            county = guess_county(text, self.state)
+
+        if county:
+            talktext = talk.get()
+            newtext = photoReqPat.sub(r'{{image requested|\2in=%s}}' % county, talktext)
+            newtext = re.sub(r'{{image requested\|\|+', r'{{image requested|', newtext)
+        else:
+            print "couldn't guess at %s" % page.title()
+            return
+
+        if not newtext:
+            print "something friggin weird happened on %s" % article.title()
+            return
+
+        log(page.title())
+        log(newtext)
+        if not debug:
+            try:
+                self.userPut(
+                    page, talktext, newtext, botflag=True,
+                    comment='moving to [[Category:Wikipedia requested photographs in %s]] by the [[User:PhotoCatBot|PhotoCat]]' % county)
+                maybe_create_category(county, self.state, self.site)
+            except pywikibot.LockedPage:
+                return False
+
+
+def main():
+    global startCat
+    global photoReqPat
+    global debug
+    debug = False
+    state = False
+    try:
+        opts, args = getopt.getopt(
+                        sys.argv[1:],
+                        "dp:l:",
+                        ["debug", "place=", "location="]
+                        )
+    except getopt.GetoptError, err:
+        # print help information and exit:
+        print str(err) # will print something like "option -a not recognized"
+        sys.exit(2)
+    for o, a in opts:
+        if o in ('-d', '--debug'):
+            debug = True
+        if o in ('-p', '--place', '-l', '--location'):
+            state = a
+
+    if state:
+        startCat = startCat % state
+        photoReqPat = re.compile(photoReqPatStr % state, re.I)
+    else:
+        print "required argument 'location' missing"
+        sys.exit(2)
+
+    site = pywikibot.Site()
+    cat = pywikibot.Category(site, startCat)
+    gen = pagegenerators.CategorizedPageGenerator(cat)
+    bot = PhotoCountyBot(state=state, generator=gen)
+    bot.run()
+
 
 if __name__ == '__main__':
     try:
