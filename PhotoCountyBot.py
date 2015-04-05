@@ -4,6 +4,13 @@
 #
 # Walk through [[Category:Wikipedia requested photographs in <state>]],
 # looking for articles that can be reclassified into subcategories.
+#
+# Notes on sources for county information:
+#
+# Massachusetts: http://www.sec.state.ma.us/ele/elecct/cctidx.htm
+# Pennsylvania: http://pennsylvania.hometownlocator.com/counties/
+# Iowa: http://iowa.hometownlocator.com/counties/
+# Maryland, Indiana, California?
 
 import time
 import re
@@ -11,6 +18,7 @@ import getopt, sys
 import os
 
 import county_map
+import mwparserfromhell
 import pywikibot
 from pywikibot import pagegenerators
 
@@ -43,6 +51,15 @@ photoReqPat = ''
 
 global debug
 
+def PhotoCountyBot(pywikibot.bot.Bot):
+    def __init__(self, state, **kwargs):
+        self.state = state
+        super(PhotoCountyBot, self).__init__(**kwargs)
+
+    def treat(self, page):
+        process_page(self.site, page, self.state)
+
+
 def main():
     global startCat
     global photoReqPat
@@ -72,26 +89,27 @@ def main():
         print "required argument 'location' missing"
         sys.exit(2)
 
-    site = pywikibot.getSite()
+    site = pywikibot.Site()
     cat = pywikibot.Category(site, startCat)
     gen = pagegenerators.CategorizedPageGenerator(cat)
-    for page in gen:
-        if process_page(site, page, state):
-            time.sleep(30)
+    bot = PhotoCountyBot(state=state, generator=gen)
+    bot.run()
 
 def process_page(site, page, state):
     global photoReqPat
     global debug
 
-    if (page.title().find("Talk:") == 0):
+    if page.isTalkPage():
+        article = page.toggleTalkPage()
         talk = page
-        article = pywikibot.Page(site, page.title().replace("Talk:","",1))
     else:
         article = page
-        talk = pywikibot.Page(site, "Talk:" + page.title())
+        talk = page.toggleTalkPage()
 
     try:
         text = article.get()
+    except KeyboardInterrupt:
+        raise
     except:
         print "%s error thrown by %s" % (sys.exc_info()[0], article.title())
         return False
@@ -102,8 +120,10 @@ def process_page(site, page, state):
     #   - looking up the article title in the county map
     #   - looking for a county given explicitly in the article title
     #   - searching the text of the first paragraph for a related town
-    cm = county_map.county_map()
-    county = cm.lookup(article.title())
+
+    # cm = county_map.county_map()
+    # county = cm.lookup(article.title())
+    county = lookup_county(article.title(), site)
     if not county:
         county = find_county_in_text(page.title(), state)
     if not county:
@@ -160,6 +180,36 @@ def guess_county(text, state):
         if county:
             log("guess_county: found '{}' from looking up link [[{}]]".format(county, exactlink))
             return county
+
+def lookup_county(town, site):
+    """Look up the county for a given town from its Wikipedia article.
+
+    The 'town' argument should be the name of a Wikipedia
+    article for a town or city.  lookup_county will load this
+    article, look for {{Infobox settlement}} and will see if
+    a county is named in one of the 'subdivision_name' parameters,
+    and will return that county name if so.
+
+    If no Wikipedia article exists for this town, or if the article
+    does not have a matching infobox, or if the infobox does not
+    mention a county, None is returned.
+    """
+    try:
+        townpage = pywikibot.Page(site, town).get()
+    except pywikibot.NoPage():
+        return None
+
+    w = mwparserfromhell.parse(townpage)
+    for t in w.filter_templates():
+        if t.name.strip_code() == 'Infobox settlement':
+            # Find the subdivision_name parameters and
+            # look for one that names a county
+            params = [ p for p in t.params
+                       if p.name.find('subdivision_name') > -1 ]
+            for p in params:
+                c = p.value.filter_wikilinks(matches='County,')
+                if c:
+                    return c[0].title
 
 def find_county_in_text(text, state):
     m = re.search(' *([^,(]* County, %s)$' % state, text)
