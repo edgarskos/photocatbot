@@ -50,7 +50,7 @@ photoReqPatStr = (
 
 photoReqPat = ''
 
-global debug
+debug = False
 
 def guess_county(text, state):
     cm = county_map.county_map()
@@ -202,6 +202,7 @@ def main(argv):
     global startCat
     global photoReqPat
     global debug
+
     debug = False
     state = False
 
@@ -212,8 +213,9 @@ def main(argv):
     parser.add_argument('--place', '-p', '--location', '-l',
                         help='specify location to start (required)',
                         required=True)
-    args = parser.parse_args(argv[1:])
 
+    args = parser.parse_args(argv[1:])
+    debug = args.debug
     startCat = startCat % args.place
     photoReqPat = re.compile(photoReqPatStr % args.place, re.I)
 
