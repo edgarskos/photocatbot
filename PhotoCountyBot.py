@@ -19,7 +19,7 @@ import sys
 import time
 
 import county_map
-import mwparserfromhell
+import mwparserfromhell as mw
 import pywikibot
 from pywikibot import pagegenerators
 
@@ -28,27 +28,6 @@ from pywikibot import pagegenerators
 # line will be substituted into both.
 #
 startCat = 'Category:Wikipedia requested photographs in %s'
-
-# This pattern matches photo request templates of the form
-# {{image requested|in=Foobar}} (and which use *no* other parameters).
-photoReqPatStr = (
-    '{{(picreq'
-    '|image request(?:ed)?'
-    '|images? needed'
-    '|photo'
-    '|photoreq'
-    '|photo(?:graph)? requested'
-    '|picture needed'
-    '|reqp'
-    '|reqimage'
-    '|req photograph'
-    '|reqphoto(?:graph)?'
-    '|requested photograph'
-    '|needs image)'
-    r'([^}]*)in[=|]%s}}'
-)
-
-photoReqPat = ''
 
 debug = False
 
@@ -79,7 +58,7 @@ def guess_county(text, state):
             log("guess_county: found '{}' from looking up link [[{}]]".format(county, exactlink))
             return county
 
-def lookup_county(town, site):
+def lookup_county(town):
     """Look up the county for a given town from its Wikipedia article.
 
     The 'town' argument should be the name of a Wikipedia
@@ -93,11 +72,11 @@ def lookup_county(town, site):
     mention a county, None is returned.
     """
     try:
-        townpage = pywikibot.Page(site, town).get()
+        townpage = pywikibot.Page(pywikibot.Site(), town).get()
     except pywikibot.NoPage():
         return None
 
-    w = mwparserfromhell.parse(townpage)
+    w = mw.parse(townpage)
     for t in w.filter_templates():
         if t.name.strip_code() == 'Infobox settlement':
             # Find the subdivision_name parameters and
@@ -116,9 +95,9 @@ def find_county_in_text(text, state):
         return m.group(1)
     return False
 
-def maybe_create_category(county, state, site):
+def maybe_create_category(county, state):
     cat = 'Category:Wikipedia requested photographs in %s' % county
-    catpage = pywikibot.Page(site, cat)
+    catpage = pywikibot.Page(pywikibot.Site(), cat)
     try:
         text = catpage.get()
     except pywikibot.NoPage:
@@ -134,6 +113,23 @@ def log(msg):
         script = os.path.basename(__file__)
         print "{}: {} {}".format(script, time.asctime(), msg)
 
+def canonical_name(template):
+    """Returns the canonical name of the template in mediawiki node
+    'template', after following any redirects.
+    """
+    page = pywikibot.Page(pywikibot.Site(), 'Template:' + unicode(template.name))
+    while page.isRedirectPage():
+        page = page.getRedirectTarget()
+    return page.title()
+
+def is_photo_request(node):
+    """Returns True if the specified mediawiki node represents a template
+    that is or redirects to {{image requested}}.
+    """
+    if isinstance(node, mw.nodes.Template):
+        return canonical_name(node) == 'Template:Image requested'
+    return False
+
 
 class PhotoCountyBot(pywikibot.bot.Bot):
     def __init__(self, state, **kwargs):
@@ -141,7 +137,6 @@ class PhotoCountyBot(pywikibot.bot.Bot):
         super(PhotoCountyBot, self).__init__(**kwargs)
 
     def treat(self, page):
-        global photoReqPat
         global debug
 
         if page.isTalkPage():
@@ -168,39 +163,51 @@ class PhotoCountyBot(pywikibot.bot.Bot):
 
         # cm = county_map.county_map()
         # county = cm.lookup(article.title())
-        county = lookup_county(article.title(), self.site)
+        county = lookup_county(article.title())
         if not county:
             county = find_county_in_text(page.title(), self.state)
         if not county:
             county = guess_county(text, self.state)
 
-        if county:
-            talktext = talk.get()
-            newtext = photoReqPat.sub(r'{{image requested|\2in=%s}}' % county, talktext)
-            newtext = re.sub(r'{{image requested\|\|+', r'{{image requested|', newtext)
-        else:
+        if not county:
             print "couldn't guess at %s" % page.title()
             return
+
+        # Find an {{image requested}} template and update it with
+        # the desired location.
+        oldtext = talk.get()
+        parsed = mw.parse(oldtext)
+        tmpls = parsed.filter_templates(matches=is_photo_request)
+        if tmpls:
+            tmpls[0].add('in', county)
+        else:
+            # insert a new {{image requested}} template after any
+            # templates at the start of the article.
+            for n in parsed.nodes:
+                if isinstance(n, mw.nodes.Template):
+                    continue
+                parsed.insert_before(n, "\n")
+                parsed.insert_before(n, mw.nodes.Template(
+                    'image requested', ['in=' + county] ))
+                break
+        newtext = parsed.__unicode__()
 
         if not newtext:
             print "something friggin weird happened on %s" % article.title()
             return
 
         log(page.title())
-        log(newtext)
-        if not debug:
-            try:
-                self.userPut(
-                    page, talktext, newtext, botflag=True,
-                    comment='moving to [[Category:Wikipedia requested photographs in %s]] by the [[User:PhotoCatBot|PhotoCat]]' % county)
-                maybe_create_category(county, self.state, self.site)
-            except pywikibot.LockedPage:
-                return False
+        try:
+            self.userPut(
+                page, oldtext, newtext, botflag=True,
+                comment='moving to [[Category:Wikipedia requested photographs in %s]] by the [[User:PhotoCatBot|PhotoCat]]' % county)
+            #maybe_create_category(county, self.state, self.site)
+        except pywikibot.LockedPage:
+            return False
 
 
 def main(argv):
     global startCat
-    global photoReqPat
     global debug
 
     debug = False
@@ -217,7 +224,6 @@ def main(argv):
     args = parser.parse_args(argv[1:])
     debug = args.debug
     startCat = startCat % args.place
-    photoReqPat = re.compile(photoReqPatStr % args.place, re.I)
 
     site = pywikibot.Site()
     cat = pywikibot.Category(site, startCat)
