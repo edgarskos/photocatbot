@@ -31,6 +31,11 @@ import mwparserfromhell
 #   * use canonical template names
 #   * preserve "date" and "of" params on image requests
 
+defaultCategory = 'Wikipedia requested photographs'
+editComment = ('cleanup for the [[User:Twp/Drafts/WikiProject Photo'
+               ' Requests|Photo Request WikiProject]], by the'
+               ' [[User:PhotoCatBot|PhotoCat]]')
+
 # Location names found in WikiProject United States, and
 # the photo category names they translate to
 WPUS_locations = {
@@ -400,7 +405,7 @@ class PhotoCatFixer:
             else:
                 try:
                     self._site.tokens._tokens.clear()  # https://phabricator.wikimedia.org/T61678
-                    self._article.toggleTalkPage().put(newtext, PhotoCatBot.editComment)
+                    self._article.toggleTalkPage().put(newtext, editComment)
                     time.sleep(30)
                 except pywikibot.LockedPage:
                     pass
@@ -548,13 +553,7 @@ class PhotoCatFixer:
             self._article.title(),
             errmsg)
 
-class PhotoCatBot:
-    # class constants
-
-    defaultCategory = 'Wikipedia requested photographs'
-    editComment = ('cleanup for the [[User:Twp/Drafts/WikiProject Photo'
-                   ' Requests|Photo Request WikiProject]], by the'
-                   ' [[User:PhotoCatBot|PhotoCat]]')
+class PhotoCatBot(pywikibot.bot.Bot):
 
     # This pattern matches unqualified photo request templates.
     # TODO: instead, replace any template for which
@@ -578,54 +577,49 @@ class PhotoCatBot:
         r'\s*\|?[^{}]*}}',
         re.I)
 
-    def main(self, argv):
-        debug = False
+    def treat(self, page):
+        photo_fixer = PhotoCatFixer(self.site, page, self.debug)
+        photo_fixer.handle_article()
 
-        parser = argparse.ArgumentParser()
-        parser.add_argument('--debug', '-d',
-                            help='enable debugging output',
-                            action='store_true')
-        parser.add_argument(
-            '--category', '--cat', '-c',
-            help='specify starting category (defaults to "{}")'.format(
-                PhotoCatBot.defaultCategory),
-            default=PhotoCatBot.defaultCategory
-        )
-        parser.add_argument('--repeat', '-r',
-                            help='number of minutes in which to repeat',
-                            type=int)
-        parser.add_argument('pages',
-                            help='List of page titles to process',
-                            nargs=argparse.REMAINDER)
-
-        args = parser.parse_args(argv[1:])
-
-        site = pywikibot.getSite()
-
-        while True:
-            if args.pages:
-                pagegen = pagegenerators.PagesFromTitlesGenerator(args.pages)
-            else:
-                cat = pywikibot.Category(site, 'Category:' + args.category)
-                pagegen = pagegenerators.CategorizedPageGenerator(cat)
-
-            for page in pagegen:
-                photo_fixer = PhotoCatFixer(site, page, debug)
-                photo_fixer.handle_article()
-
-            if args.repeat:
-                nextrun = args.repeat * 60
-                print "Next run in {} seconds...".format(nextrun)
-                time.sleep(nextrun)
-            else:
-                break
 
 def main(argv):
-    try:
-        bot = PhotoCatBot()
-        bot.main(argv)
-    finally:
-        pywikibot.stopme()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--debug', '-d',
+                        help='enable debugging output',
+                        action='store_true')
+    parser.add_argument(
+        '--category', '--cat', '-c',
+        help='specify starting category (default "{}")'.format(defaultCategory),
+        default=defaultCategory
+    )
+    parser.add_argument('--repeat', '-r',
+                        help='number of minutes in which to repeat',
+                        type=int)
+    parser.add_argument('pages',
+                        help='List of page titles to process',
+                        nargs=argparse.REMAINDER)
+
+    args = parser.parse_args(argv[1:])
+    site = pywikibot.Site()
+
+    while True:
+        if args.pages:
+            pagegen = pagegenerators.PagesFromTitlesGenerator(args.pages)
+        else:
+            cat = pywikibot.Category(site, 'Category:' + args.category)
+            pagegen = pagegenerators.CategorizedPageGenerator(cat)
+
+        bot = PhotoCatBot(generator=pagegen)
+        bot.debug = args.debug
+        bot.run()
+
+        if args.repeat:
+            nextrun = args.repeat * 60
+            print "Next run in {} seconds...".format(nextrun)
+            time.sleep(nextrun)
+        else:
+            break
+
 
 if __name__ == '__main__':
     main(sys.argv)
