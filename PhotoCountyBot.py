@@ -12,10 +12,11 @@
 # Iowa: http://iowa.hometownlocator.com/counties/
 # Maryland, Indiana, California?
 
-import time
-import re
-import getopt, sys
+import argparse
 import os
+import re
+import sys
+import time
 
 import county_map
 import mwparserfromhell
@@ -197,45 +198,35 @@ class PhotoCountyBot(pywikibot.bot.Bot):
                 return False
 
 
-def main():
+def main(argv):
     global startCat
     global photoReqPat
     global debug
     debug = False
     state = False
-    try:
-        opts, args = getopt.getopt(
-                        sys.argv[1:],
-                        "dp:l:",
-                        ["debug", "place=", "location="]
-                        )
-    except getopt.GetoptError, err:
-        # print help information and exit:
-        print str(err) # will print something like "option -a not recognized"
-        sys.exit(2)
-    for o, a in opts:
-        if o in ('-d', '--debug'):
-            debug = True
-        if o in ('-p', '--place', '-l', '--location'):
-            state = a
 
-    if state:
-        startCat = startCat % state
-        photoReqPat = re.compile(photoReqPatStr % state, re.I)
-    else:
-        print "required argument 'location' missing"
-        sys.exit(2)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--debug', '-d',
+                        help='enable debugging output',
+                        action='store_true')
+    parser.add_argument('--place', '-p', '--location', '-l',
+                        help='specify location to start (required)',
+                        required=True)
+    args = parser.parse_args(argv[1:])
+
+    startCat = startCat % args.place
+    photoReqPat = re.compile(photoReqPatStr % args.place, re.I)
 
     site = pywikibot.Site()
     cat = pywikibot.Category(site, startCat)
     gen = pagegenerators.CategorizedPageGenerator(cat)
-    bot = PhotoCountyBot(state=state, generator=gen)
+    bot = PhotoCountyBot(state=args.place, generator=gen)
     bot.run()
 
 
 if __name__ == '__main__':
     try:
-        main()
+        main(sys.argv)
     finally:
         pywikibot.stopme()
 
