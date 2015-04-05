@@ -10,8 +10,6 @@ from pywikibot import pagegenerators
 
 import mwparserfromhell
 
-# PhotoCatFixer fixes photo categories on a single article.
-
 # TODO:
 #
 #   * get location hints from other WikiProject templates
@@ -90,6 +88,253 @@ WPUS_locations = {
     'Youngstown':        'Youngstown, Ohio',
     }
 
+# This pattern matches location-oriented WikiProjects.
+wikiLocationPat = re.compile(
+    '(WikiProject|Project|WP)[ _]?'
+    '(Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut'
+    '|Delaware|Florida|Georgia \(U\.S\. state\)|Hawaii|Idaho|Illinois'
+    '|Indiana|Iowa|Kansas|Kentucky|Louisiana|Louisville|Maine|Maryland'
+    '|Mexico|Michigan|Minnesota|Mississippi|Missouri|Montana|Nebraska'
+    '|Nevada|New Hampshire|New Jersey|New Mexico|New York|North Carolina'
+    '|North Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode Island'
+    '|South Carolina|South Dakota|Tennessee|Texas|Utah|Virginia|Washington'
+    '|West Virginia|Wisconsin|Wyoming'
+    '|Afghanistan|Africa|Argentina|Australia|Bangladesh|Belgium|Bolivia|Bulgaria'
+    '|Cambodia|Canada|Chile|Cornwall|Croatia|Cuba|Cyprus|Devon|Egypt'
+    '|England|Finland|France|Ghana|Greece|Haiti|Hungary|Iceland|India|Indonesia'
+    '|Iraq|Iran|Israel|Italy|Japan|Korea|Kuwait|Lebanon|Lithuania|London'
+    '|Mongolia|Montenegro|New Zealand|Nigeria|Norway|Nottinghamshire|Oman|Ottawa|Pakistan'
+    '|Poland|Portugal|Romania|Russia|Sheffield|Slovakia|Somalia|Spain|Sri Lanka|Surrey'
+    '|Sweden|Syria|Taiwan|Tibet|Turkey|Vancouver|Venezuela|Vietnam|Yorkshire)'
+    r'\s*(\||$)')
+
+# location_map, subject_map, and custom_map tell PhotoCatBot how to specify
+# photo requests for an article, based on what other WikiProject templates
+# are already present:
+#   - subject_map: specifies e.g. {{image requested|ships}} for {{WikiProject Ships}}
+#   - location_map: specifies e.g. {{image requested|in=China}} for {{WPCHINA}}
+#   - custom-map: adds e.g. 'needs-photo=yes' to the {{BirdTalk}} template
+#
+# The key of each map is the complete name of a talk page template, e.g.
+# {{TelevisionWikiProject}}, {{Visual arts}}, {{WPMILHIST}}.
+#
+# The value of subject_map is the 'subject' parameter to the
+# {{image requested}} template, e.g. {{image requested|ships}},
+# {{image requested|military history}}
+#
+# The value of location_map is an 'in' parameter to {{image requested}}.
+#
+# The value of custom_map is the name of the parameter for that template
+# that is used to add a photo request, e.g. {{BirdTalk|needs-photo=yes}}
+#
+subject_map = {
+    'WikiProject Albums':           'albums',
+    'WikiProject Alternative music': 'music',
+    'WikiProject Agriculture':      'agricultural topics',
+    'WikiProject Amateur radio':    'amateur radio' ,
+    'WikiProject Anglicanism':      'religious subjects',
+    'WikiProject Architecture':     'architecture',
+    'WikiProject Aquarium Fishes':  'fish',
+    'WikiProject Automobiles':      'cars',
+    'WikiProject Basketball':       'basketball',
+    'WikiProject Beer':             'beer',
+    'WikiProject Board and table games': 'games',
+    'WikiProject Brands':           'brands',
+    'WikiProject Bridges':          'bridges',
+    'WikiProject British crime':    'law and crime topics',
+    'WikiProject British TV shows': 'television programs',
+    'WikiProject Battlestar Galactica': 'television programs',
+    'WikiProject Boxing':           'boxing',
+    'WikiProject Buddhism':         'religious subjects',
+    'WikiProject Business':         'business & economic topics',
+    'WikiProject Catholicism':      'religious subjects',
+    'WikiProject Chemicals':        'chemical compounds',
+    'WikiProject Christianity':     'religious subjects',
+    'WikiProject Christian music':  'music',
+    'WikiProject Classical music':  'music',
+    'WikiProject College football': 'American football people',
+    'WikiProject Computing':        'computing equipment',
+    'WikiProject Country Music':    'music',
+    'WikiProject Companies':        'business & economic topics',
+    'WikiProject Cricket':          'cricket',
+    'WikiProject Crime':            'law and crime topics',
+    'WikiProject Criminal Biography': 'law and crime topics',
+    'WikiProject Cycling':          'cycling people',
+    'WikiProject Discographies':    'albums',
+    'WikiProject E-theatre':        'performing arts',
+    'WikiProject Earthquakes':      'earthquakes',
+    'WikiProject Economics':        'business & economic topics',
+    'WikiProject Electronics':      'electronics',
+    'WikiProject Environment':      'environmental topics',
+    'WikiProject Fashion':          'fashion',
+    'WikiProject Fencing':          'sports and games',
+    'WikiProject Football':         'association football people',
+    'WikiProject Figure Skating':   'performing arts',
+    'WikiProject Fisheries and Fishing': 'fisheries and fishing',
+    'WikiProject Formula One':      'cars',
+    'WikiProject Fungi':            'fungi',
+    'WikiProject Gemology and Jewelry': 'jewelry',
+    'WikiProject Geology':          'geology',
+    'WikiProject Guitarists':       'musicians',
+    'WikiProject Gymnastics':       'gymnastics',
+    'WikiProject Horse racing':     'equestrians',
+    'WikiProject Hospitals':        'hospitals',
+    'WikiProject International relations': 'political topics',
+    'WikiProject Jazz':             'music',
+    'WikiProject Judaism':          'religious subjects',
+    'WikiProject Languages':        'languages',
+    'WikiProject Libraries':        'libraries',
+    'WikiProject Law':              'law and crime topics',
+    'WikiProject Law Enforcement':  'law and crime topics',
+    'WikiProject Lost':             'television programs',
+    'WikiProject Magazines':        'publications',
+    'WikiProject Medicine':         'medical subjects',
+    'WikiProject Metal':            'music',
+    'WikiProject Museums':          'museums',
+    'WikiProject Music of the United Kingdom': 'music',
+    'WikiProject Musical Instruments': 'musical instruments',
+    'WikiProject Military history': 'military history',
+    'WikiProject Mythology':        'mythology subjects',
+    'WikiProject Neopaganism':      'religious subjects',
+    'WikiProject Newspapers':       'publications',
+    'WikiProject Olympics':         'sports and games',
+    'WikiProject Opera':            'music',
+    'WikiProject Organized Labour': 'political topics',
+    'WikiProject Photography':      'photography',
+    'WikiProject Physics':          'physics subjects',
+    'WikiProject Pinball':          'games',
+    'WikiProject Politics':         'political topics',
+    'WikiProject Pop music':        'music',
+    'WikiProject Pritzker-GLAM':    'military history',
+    'WikiProject Professional wrestling': 'professional wrestling performers',
+    'WikiProject Punk music':       'music',
+    'WikiProject R&B and Soul Music': 'music',
+    'WikiProject Religion':         'religious subjects',
+    'WikiProject Rivers':           'rivers and waterfalls',
+    'WikiProject Rock music':       'music',
+    'WikiProject Role-playing games': 'games',
+    'WikiProject Rugby league':     'rugby league people',
+    'WikiProject Rugby union':      'rugby union people',
+    'WikiProject Saints':           'Saints',
+    'WikiProject Schools':          'schools',
+    'WikiProject Scouting':         'Scouting and Guiding',
+    'WikiProject Severe weather':   'earth science subjects',
+    'WikiProject Sexuality':        'sexuality subjects',
+    'WikiProject Ships':            'ships',
+    'WikiProject Shipwrecks':       'ships',
+    'WikiProject Shopping Centers': 'shopping centers',
+    'WikiProject Songs':            'music',
+    'WikiProject Spiders':          'arthropods',
+    'WikiProject Spirits':          'food and drink',
+    'WikiProject Terrorism':        'political topics',
+    'WikiProject Textile Arts':     'textiles and fabrics',
+    'WikiProject Theatre':          'performing arts',
+    'WikiProject Trucks':           'trucks',
+    'WikiProject Toys':             'toys',
+    'WikiProject Universities':     'schools',
+    'WikiProject Viruses':          'Viruses',
+    'WikiProject Visual arts':      'art',
+    'WikiProject Zoo':              'zoos',
+    }
+
+location_map = {
+    'WikiProject Burma (Myanmar)':    'Burma',
+    'WikiProject Central Asia':       'Asia',
+    'WikiProject Chicago':            'Chicago, Illinois',
+    'WikiProject Cleveland':          'Cleveland, Ohio',
+    'WikiProject Education in the United Kingdom': 'the United Kingdom',
+    'WikiProject Houston':            'Houston, Texas',
+    'WikiProject Micronesia':         'the Federated States of Micronesia',
+    'WikiProject Music of the United Kingdom': 'the United Kingdom',
+    'WikiProject Netherlands':        'the Netherlands',
+    'WikiProject Philippine History': 'the Philippines',
+    'WikiProject Philippines':        'the Philippines',
+    'WikiProject Tambayan Philippines': 'the Philippines',
+    'WikiProject U.S. Congress':      'Washington, D.C.',
+    'WikiProject UK Roads':           'the United Kingdom',
+    'WikiProject United Kingdom':     'the United Kingdom',
+    }
+
+custom_map = {
+    'WikiProject Amphibians and Reptiles':   'needs-photo',
+    'WikiProject Amusement Parks':           'imageneeded',
+    'WikiProject Anatomy':                   'needs-photo',
+    'WikiProject Animals':                   'needs-photo',
+    'WikiProject Animation':                 'needs-image',
+    'WikiProject Anime and manga':           'needs-image',
+    'WikiProject Armenia':                   'needs-photo',
+    'WikiProject Arthropods':                'needs-photo',
+    'WikiProject Astronomy':                 'needs-image',
+    'WikiProject Atlanta':                   'imageneeded',
+    'WikiProject Aviation':                  'Imageneeded',
+    'WikiProject Baseball':                  'image',
+    'WikiProject Biography':                 'needs-photo',
+    'WikiProject Biology':                   'needs-photo',
+    'WikiProject Birds':                     'needs-photo',
+    'WikiProject Books':                     'needs-infobox-cover',
+    'WikiProject Brazil':                    'needs-photo',
+    'WikiProject Canada':                    'needs-photo',
+    'WikiProject Cats':                      'needs-photo',
+    'WikiProject Chemistry':                 'needs-picture',
+    "WikiProject Children's literature":     'needs-infobox-cover',
+    'WikiProject China':                     'image-needed',
+    'WikiProject Comics':                    'photo',
+
+    'WikiProject Dance':                     'needs-image',
+    'WikiProject Denmark':                   'imageneeded',
+    'WikiProject Ecuador':                   'imageneeded',
+    'WikiProject Electronic music':          'needs-photo',
+    'WikiProject Energy':                    'needs-photo',
+    'WikiProject Engineering':               'imageneeded',
+    'WikiProject Film':                      'needs-image',
+    'WikiProject Firearms':                  'needs-image',
+    'WikiProject Fishes':                    'imageneeded',
+    'WikiProject Food and drink':            'needs-photo',
+    'WikiProject Games':                     'needs-photo',
+    'WikiProject Gastropods':                'needs-photo',
+    'WikiProject Genetics':                  'imageneeded',
+    'WikiProject Georgia (U.S. state)':      'imageneeded',
+    'WikiProject Germany':                   'imageneeded',
+    'WikiProject Heraldry and vexillology':  'imageneeded',
+    'WikiProject Hong Kong':                 'image-needed',
+    'WikiProject Ice Hockey':                'needs-photo',
+    'WikiProject Industrial design':         'needs-image',
+    'WikiProject Insects':                   'needs-photo',
+    'WikiProject Internet culture':          'needs-photo',
+    'WikiProject Ireland':                   'image-needed',
+    'WikiProject Latter Day Saint movement': 'needs-photo',
+    'WikiProject Lepidoptera':               'needs-photo',
+    'WikiProject Mammals':                   'needs-photo',
+    'WikiProject Mauritius':                 'image-needed',
+    'WikiProject Micro':                     'needs-photo',
+    'WikiProject Moldova':                   'imageneeded',
+    'WikiProject Motorcycling':              'image-needed',
+    'WikiProject Mountains':                 'needs-photo',
+    'WikiProject Musical Theatre':           'imageneeded',
+    'WikiProject New York City':             'image-needed',
+    'WikiProject Nickelodeon':               'needs-image',
+    'WikiProject National Football League':  'needs-image',
+    'WikiProject Novels':                    'needs-infobox-cover',
+    'WikiProject Plants':                    'needs-photo',
+    'WikiProject Politics of the United Kingdom': 'needs-picture',
+    'WikiProject Primates':                  'needs-photo',
+    'WikiProject Russia':                    'imageneeded',
+    'WikiProject Singapore':                 'imagerequest',
+    'WikiProject Skyscrapers':               'imageneeded',
+    'WikiProject Software':                  'needs-image',
+    'WikiProject Soil':                      'needs-photo',
+    'WikiProject South Africa':              'image-needed',
+    'WikiProject Spaceflight':               'needs-image',
+    'WikiProject Star Trek':                 'needs-picture',
+    'WikiProject Swimming':                  'needs-photo',
+    'WikiProject Television':                'needs-image',
+    'WikiProject Trains':                    'imageneeded',
+    'WikiProject U2':                        'needs-photo',
+    'WikiProject Video games':               'screenshot',
+    'WikiProject Wales':                     'imageneeded',
+    'WikiProject Wine':                      'needs-photo',
+    }
+
 def canonical_name(site, template):
     """Return the canonical name of this template, after following any redirects."""
     page = pywikibot.Page(site, 'Template:' + unicode(template.name))
@@ -100,263 +345,27 @@ def canonical_name(site, template):
 def is_photo_request(site, template):
     return canonical_name(site, template) == 'Template:Image requested'
 
-class PhotoCatFixer:
+class PhotoCatBot(pywikibot.bot.Bot):
 
-    # This pattern matches location-oriented WikiProjects.
-    wikiLocationPat = re.compile(
-        '(WikiProject|Project|WP)[ _]?'
-        '(Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut'
-        '|Delaware|Florida|Georgia \(U\.S\. state\)|Hawaii|Idaho|Illinois'
-        '|Indiana|Iowa|Kansas|Kentucky|Louisiana|Louisville|Maine|Maryland'
-        '|Mexico|Michigan|Minnesota|Mississippi|Missouri|Montana|Nebraska'
-        '|Nevada|New Hampshire|New Jersey|New Mexico|New York|North Carolina'
-        '|North Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode Island'
-        '|South Carolina|South Dakota|Tennessee|Texas|Utah|Virginia|Washington'
-        '|West Virginia|Wisconsin|Wyoming'
-        '|Afghanistan|Africa|Argentina|Australia|Bangladesh|Belgium|Bolivia|Bulgaria'
-        '|Cambodia|Canada|Chile|Cornwall|Croatia|Cuba|Cyprus|Devon|Egypt'
-        '|England|Finland|France|Ghana|Greece|Haiti|Hungary|Iceland|India|Indonesia'
-        '|Iraq|Iran|Israel|Italy|Japan|Korea|Kuwait|Lebanon|Lithuania|London'
-        '|Mongolia|Montenegro|New Zealand|Nigeria|Norway|Nottinghamshire|Oman|Ottawa|Pakistan'
-        '|Poland|Portugal|Romania|Russia|Sheffield|Slovakia|Somalia|Spain|Sri Lanka|Surrey'
-        '|Sweden|Syria|Taiwan|Tibet|Turkey|Vancouver|Venezuela|Vietnam|Yorkshire)'
-        r'\s*(\||$)')
+    def __init__(self, debug=False, **kwargs):
+        self.debug = debug
+        super(PhotoCatBot, self).__init__(**kwargs)
 
-    # location_map, subject_map, and custom_map tell PhotoCatBot how to specify
-    # photo requests for an article, based on what other WikiProject templates
-    # are already present:
-    #   - subject_map: specifies e.g. {{image requested|ships}} for {{WikiProject Ships}}
-    #   - location_map: specifies e.g. {{image requested|in=China}} for {{WPCHINA}}
-    #   - custom-map: adds e.g. 'needs-photo=yes' to the {{BirdTalk}} template
-    #
-    # The key of each map is the complete name of a talk page template, e.g.
-    # {{TelevisionWikiProject}}, {{Visual arts}}, {{WPMILHIST}}.
-    #
-    # The value of subject_map is the 'subject' parameter to the
-    # {{image requested}} template, e.g. {{image requested|ships}},
-    # {{image requested|military history}}
-    #
-    # The value of location_map is an 'in' parameter to {{image requested}}.
-    #
-    # The value of custom_map is the name of the parameter for that template
-    # that is used to add a photo request, e.g. {{BirdTalk|needs-photo=yes}}
-    #
-    subject_map = {
-        'WikiProject Albums':           'albums',
-        'WikiProject Alternative music': 'music',
-        'WikiProject Agriculture':      'agricultural topics',
-        'WikiProject Amateur radio':    'amateur radio' ,
-        'WikiProject Anglicanism':      'religious subjects',
-        'WikiProject Architecture':     'architecture',
-        'WikiProject Aquarium Fishes':  'fish',
-        'WikiProject Automobiles':      'cars',
-        'WikiProject Basketball':       'basketball',
-        'WikiProject Beer':             'beer',
-        'WikiProject Board and table games': 'games',
-        'WikiProject Brands':           'brands',
-        'WikiProject Bridges':          'bridges',
-        'WikiProject British crime':    'law and crime topics',
-        'WikiProject British TV shows': 'television programs',
-        'WikiProject Battlestar Galactica': 'television programs',
-        'WikiProject Boxing':           'boxing',
-        'WikiProject Buddhism':         'religious subjects',
-        'WikiProject Business':         'business & economic topics',
-        'WikiProject Catholicism':      'religious subjects',
-        'WikiProject Chemicals':        'chemical compounds',
-        'WikiProject Christianity':     'religious subjects',
-        'WikiProject Christian music':  'music',
-        'WikiProject Classical music':  'music',
-        'WikiProject College football': 'American football people',
-        'WikiProject Computing':        'computing equipment',
-        'WikiProject Country Music':    'music',
-        'WikiProject Companies':        'business & economic topics',
-        'WikiProject Cricket':          'cricket',
-        'WikiProject Crime':            'law and crime topics',
-        'WikiProject Criminal Biography': 'law and crime topics',
-        'WikiProject Cycling':          'cycling people',
-        'WikiProject Discographies':    'albums',
-        'WikiProject E-theatre':        'performing arts',
-        'WikiProject Earthquakes':      'earthquakes',
-        'WikiProject Economics':        'business & economic topics',
-        'WikiProject Electronics':      'electronics',
-        'WikiProject Environment':      'environmental topics',
-        'WikiProject Fashion':          'fashion',
-        'WikiProject Fencing':          'sports and games',
-        'WikiProject Football':         'association football people',
-        'WikiProject Figure Skating':   'performing arts',
-        'WikiProject Fisheries and Fishing': 'fisheries and fishing',
-        'WikiProject Formula One':      'cars',
-        'WikiProject Fungi':            'fungi',
-        'WikiProject Gemology and Jewelry': 'jewelry',
-        'WikiProject Geology':          'geology',
-        'WikiProject Guitarists':       'musicians',
-        'WikiProject Gymnastics':       'gymnastics',
-        'WikiProject Horse racing':     'equestrians',
-        'WikiProject Hospitals':        'hospitals',
-        'WikiProject International relations': 'political topics',
-        'WikiProject Jazz':             'music',
-        'WikiProject Judaism':          'religious subjects',
-        'WikiProject Languages':        'languages',
-        'WikiProject Libraries':        'libraries',
-        'WikiProject Law':              'law and crime topics',
-        'WikiProject Law Enforcement':  'law and crime topics',
-        'WikiProject Lost':             'television programs',
-        'WikiProject Magazines':        'publications',
-        'WikiProject Medicine':         'medical subjects',
-        'WikiProject Metal':            'music',
-        'WikiProject Museums':          'museums',
-        'WikiProject Music of the United Kingdom': 'music',
-        'WikiProject Musical Instruments': 'musical instruments',
-        'WikiProject Military history': 'military history',
-        'WikiProject Mythology':        'mythology subjects',
-        'WikiProject Neopaganism':      'religious subjects',
-        'WikiProject Newspapers':       'publications',
-        'WikiProject Olympics':         'sports and games',
-        'WikiProject Opera':            'music',
-        'WikiProject Organized Labour': 'political topics',
-        'WikiProject Photography':      'photography',
-        'WikiProject Physics':          'physics subjects',
-        'WikiProject Pinball':          'games',
-        'WikiProject Politics':         'political topics',
-        'WikiProject Pop music':        'music',
-        'WikiProject Pritzker-GLAM':    'military history',
-        'WikiProject Professional wrestling': 'professional wrestling performers',
-        'WikiProject Punk music':       'music',
-        'WikiProject R&B and Soul Music': 'music', 
-        'WikiProject Religion':         'religious subjects',
-        'WikiProject Rivers':           'rivers and waterfalls',
-        'WikiProject Rock music':       'music',
-        'WikiProject Role-playing games': 'games',
-        'WikiProject Rugby league':     'rugby league people',
-        'WikiProject Rugby union':      'rugby union people',
-        'WikiProject Saints':           'Saints',
-        'WikiProject Schools':          'schools',
-        'WikiProject Scouting':         'Scouting and Guiding',
-        'WikiProject Severe weather':   'earth science subjects',
-        'WikiProject Sexuality':        'sexuality subjects',
-        'WikiProject Ships':            'ships',
-        'WikiProject Shipwrecks':       'ships',
-        'WikiProject Shopping Centers': 'shopping centers',
-        'WikiProject Songs':            'music',
-        'WikiProject Spiders':          'arthropods',
-        'WikiProject Spirits':          'food and drink',
-        'WikiProject Terrorism':        'political topics',
-        'WikiProject Textile Arts':     'textiles and fabrics',
-        'WikiProject Theatre':          'performing arts',
-        'WikiProject Trucks':           'trucks',
-        'WikiProject Toys':             'toys',
-        'WikiProject Universities':     'schools',
-        'WikiProject Viruses':          'Viruses',
-        'WikiProject Visual arts':      'art',
-        'WikiProject Zoo':              'zoos',
-        }
-
-    location_map = {
-        'WikiProject Burma (Myanmar)':    'Burma',
-        'WikiProject Central Asia':       'Asia',
-        'WikiProject Chicago':            'Chicago, Illinois',
-        'WikiProject Cleveland':          'Cleveland, Ohio',
-        'WikiProject Education in the United Kingdom': 'the United Kingdom',
-        'WikiProject Houston':            'Houston, Texas',
-        'WikiProject Micronesia':         'the Federated States of Micronesia',
-        'WikiProject Music of the United Kingdom': 'the United Kingdom',
-        'WikiProject Netherlands':        'the Netherlands',
-        'WikiProject Philippine History': 'the Philippines',
-        'WikiProject Philippines':        'the Philippines',
-        'WikiProject Tambayan Philippines': 'the Philippines',
-        'WikiProject U.S. Congress':      'Washington, D.C.',
-        'WikiProject UK Roads':           'the United Kingdom',
-        'WikiProject United Kingdom':     'the United Kingdom',
-        }
-    
-    custom_map = {
-        'WikiProject Amphibians and Reptiles':   'needs-photo',
-        'WikiProject Amusement Parks':           'imageneeded',
-        'WikiProject Anatomy':                   'needs-photo',
-        'WikiProject Animals':                   'needs-photo',
-        'WikiProject Animation':                 'needs-image',
-        'WikiProject Anime and manga':           'needs-image',
-        'WikiProject Armenia':                   'needs-photo',
-        'WikiProject Arthropods':                'needs-photo',
-        'WikiProject Astronomy':                 'needs-image',
-        'WikiProject Atlanta':                   'imageneeded',
-        'WikiProject Aviation':                  'Imageneeded',
-        'WikiProject Baseball':                  'image',
-        'WikiProject Biography':                 'needs-photo',
-        'WikiProject Biology':                   'needs-photo',
-        'WikiProject Birds':                     'needs-photo',
-        'WikiProject Books':                     'needs-infobox-cover',
-        'WikiProject Brazil':                    'needs-photo',
-        'WikiProject Canada':                    'needs-photo',
-        'WikiProject Cats':                      'needs-photo',
-        'WikiProject Chemistry':                 'needs-picture',
-        "WikiProject Children's literature":     'needs-infobox-cover',
-        'WikiProject China':                     'image-needed',
-        'WikiProject Comics':                    'photo',
-
-        'WikiProject Dance':                     'needs-image',
-        'WikiProject Denmark':                   'imageneeded',
-        'WikiProject Ecuador':                   'imageneeded',
-        'WikiProject Electronic music':          'needs-photo',
-        'WikiProject Energy':                    'needs-photo',
-        'WikiProject Engineering':               'imageneeded',
-        'WikiProject Film':                      'needs-image',
-        'WikiProject Firearms':                  'needs-image',
-        'WikiProject Fishes':                    'imageneeded',
-        'WikiProject Food and drink':            'needs-photo',
-        'WikiProject Games':                     'needs-photo',
-        'WikiProject Gastropods':                'needs-photo',
-        'WikiProject Genetics':                  'imageneeded',
-        'WikiProject Georgia (U.S. state)':      'imageneeded',
-        'WikiProject Germany':                   'imageneeded',
-        'WikiProject Heraldry and vexillology':  'imageneeded',
-        'WikiProject Hong Kong':                 'image-needed',
-        'WikiProject Ice Hockey':                'needs-photo',
-        'WikiProject Industrial design':         'needs-image',
-        'WikiProject Insects':                   'needs-photo',
-        'WikiProject Internet culture':          'needs-photo',
-        'WikiProject Ireland':                   'image-needed',
-        'WikiProject Latter Day Saint movement': 'needs-photo',
-        'WikiProject Lepidoptera':               'needs-photo',
-        'WikiProject Mammals':                   'needs-photo',
-        'WikiProject Mauritius':                 'image-needed',
-        'WikiProject Micro':                     'needs-photo',
-        'WikiProject Moldova':                   'imageneeded',
-        'WikiProject Motorcycling':              'image-needed',
-        'WikiProject Mountains':                 'needs-photo',
-        'WikiProject Musical Theatre':           'imageneeded',
-        'WikiProject New York City':             'image-needed',
-        'WikiProject Nickelodeon':               'needs-image',
-        'WikiProject National Football League':  'needs-image',
-        'WikiProject Novels':                    'needs-infobox-cover',
-        'WikiProject Plants':                    'needs-photo',
-        'WikiProject Politics of the United Kingdom': 'needs-picture',
-        'WikiProject Primates':                  'needs-photo',
-        'WikiProject Russia':                    'imageneeded',
-        'WikiProject Singapore':                 'imagerequest',
-        'WikiProject Skyscrapers':               'imageneeded',
-        'WikiProject Software':                  'needs-image',
-        'WikiProject Soil':                      'needs-photo',
-        'WikiProject South Africa':              'image-needed',
-        'WikiProject Spaceflight':               'needs-image',
-        'WikiProject Star Trek':                 'needs-picture',
-        'WikiProject Swimming':                  'needs-photo',
-        'WikiProject Television':                'needs-image',
-        'WikiProject Trains':                    'imageneeded',
-        'WikiProject U2':                        'needs-photo',
-        'WikiProject Video games':               'screenshot',
-        'WikiProject Wales':                     'imageneeded',
-        'WikiProject Wine':                      'needs-photo',
-        }
-
-    def __init__(self, site, article, debug=False):
-        self._site = site
-        self._article = (article.toggleTalkPage()
-                         if article.isTalkPage()
-                         else article)
+    def treat(self, page):
+        self._article = (page.toggleTalkPage()
+                         if page.isTalkPage()
+                         else page)
         self._article_text = None
         self._article_talk = None
-        self._debug = debug
+
+        if self.needs_update():
+            oldtext = self.article_talk()
+            newtext = self.fix_photo_request()
+            self.userPut(self._article.toggleTalkPage(),
+                         oldtext,
+                         newtext,
+                         comment=editComment,
+                         botflag=True)
 
     def article_text(self):
         """Return the text of this article."""
@@ -369,14 +378,6 @@ class PhotoCatFixer:
         if not self._article_talk:
             self._article_talk = self._article.toggleTalkPage().get()
         return self._article_talk
-
-    def handle_article(self):
-        """Update any categories on this article that need updating."""
-        try:
-            if self.needs_update():
-                self.fix_category()
-        except pywikibot.InvalidTitle as e:
-            self.log('ERROR', e)
 
     def needs_update(self):
         """Returns True if the article's talk page includes any
@@ -394,23 +395,6 @@ class PhotoCatFixer:
         text = self.article_talk()
         newtext = self.fix_photo_request()
 
-        if not newtext:
-            self.log('EMPTY')
-        elif newtext == text:
-            self.log('UNCHANGED')
-        else:
-            self.log('MODIFIED')
-            if self._debug:
-                pywikibot.showDiff(text, newtext)
-            else:
-                try:
-                    self._site.tokens._tokens.clear()  # https://phabricator.wikimedia.org/T61678
-                    self._article.toggleTalkPage().put(newtext,
-                                                       comment=editComment,
-                                                       botflag=True)
-                    time.sleep(30)
-                except pywikibot.LockedPage:
-                    pass
 
     def fix_photo_request(self):
         image_request_tmpl = None
@@ -440,14 +424,14 @@ class PhotoCatFixer:
             if template_name.startswith('Template:'):
                 template_name = template_name[9:]
 
-            if PhotoCatFixer.subject_map.has_key(template_name):
-                subj_name = PhotoCatFixer.subject_map[template_name]
+            if subject_map.has_key(template_name):
+                subj_name = subject_map[template_name]
                 subjects[subj_name] = True
 
-            if PhotoCatFixer.custom_map.has_key(template_name):
+            if custom_map.has_key(template_name):
                 # This WikiProject template has its own image request parameter,
                 # which must be set to 'yes'.
-                photo_param = PhotoCatFixer.custom_map[template_name]
+                photo_param = custom_map[template_name]
                 t.add(photo_param, 'yes')
                 changed_banners = True
 
@@ -522,7 +506,7 @@ class PhotoCatFixer:
 
         # wikiLocationPat has the regional category name embedded
         # in the template name, so we use a special regex for it
-        m = PhotoCatFixer.wikiLocationPat.match(template_name)
+        m = wikiLocationPat.match(template_name)
         if m:
             locations.append(m.group(2))
 
@@ -532,8 +516,8 @@ class PhotoCatFixer:
             pass
 
         # Check the location_map, subject_map and custom_map
-        if PhotoCatFixer.location_map.has_key(template_name):
-            locations.append(PhotoCatFixer.location_map[template_name])
+        if location_map.has_key(template_name):
+            locations.append(location_map[template_name])
 
         # WikiProject United States has locations embedded as parameters
         if template_name == 'WikiProject United States':
@@ -554,16 +538,6 @@ class PhotoCatFixer:
             result,
             self._article.title(),
             errmsg)
-
-class PhotoCatBot(pywikibot.bot.Bot):
-
-    def __init__(self, debug=False, **kwargs):
-        self.debug = debug
-        super(PhotoCatBot, self).__init__(**kwargs)
-
-    def treat(self, page):
-        photo_fixer = PhotoCatFixer(self.site, page, self.debug)
-        photo_fixer.handle_article()
 
 
 def main(argv):
