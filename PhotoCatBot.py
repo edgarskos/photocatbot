@@ -405,7 +405,9 @@ class PhotoCatFixer:
             else:
                 try:
                     self._site.tokens._tokens.clear()  # https://phabricator.wikimedia.org/T61678
-                    self._article.toggleTalkPage().put(newtext, editComment)
+                    self._article.toggleTalkPage().put(newtext,
+                                                       comment=editComment,
+                                                       botflag=True)
                     time.sleep(30)
                 except pywikibot.LockedPage:
                     pass
