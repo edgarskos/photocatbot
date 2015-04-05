@@ -51,7 +51,7 @@ photoReqPat = ''
 
 global debug
 
-def PhotoCountyBot(pywikibot.bot.Bot):
+class PhotoCountyBot(pywikibot.bot.Bot):
     def __init__(self, state, **kwargs):
         self.state = state
         super(PhotoCountyBot, self).__init__(**kwargs)
