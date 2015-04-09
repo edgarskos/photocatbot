@@ -553,6 +553,9 @@ def main(argv):
     parser.add_argument('--repeat', '-r',
                         help='number of minutes in which to repeat',
                         type=int)
+    parser.add_argument('--always',
+                        help='always save changes without prompting',
+                        action='store_true')
     parser.add_argument('pages',
                         help='List of page titles to process',
                         nargs=argparse.REMAINDER)
@@ -569,7 +572,9 @@ def main(argv):
             cat = pywikibot.Category(site, 'Category:' + args.category)
             pagegen = pagegenerators.CategorizedPageGenerator(cat)
 
-        bot = PhotoCatBot(generator=pagegen, debug=args.debug)
+        bot = PhotoCatBot(generator=pagegen,
+                          debug=args.debug,
+                          always=args.always)
         bot.run()
 
         if args.repeat:
