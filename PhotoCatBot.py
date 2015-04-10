@@ -579,7 +579,7 @@ def main(argv):
 
         if args.repeat:
             nextrun = args.repeat * 60
-            print "Next run in {} seconds...".format(nextrun)
+            print "{}: Next run in {} seconds...".format(time.asctime(), nextrun)
             time.sleep(nextrun)
         else:
             break
