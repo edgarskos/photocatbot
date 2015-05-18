@@ -211,6 +211,7 @@ subject_map = {
     'WikiProject R&B and Soul Music': 'music',
     'WikiProject Religion':         'religious subjects',
     'WikiProject Rivers':           'rivers and waterfalls',
+    'WikiProject Robotics':         'engineering subjects',
     'WikiProject Rock music':       'music',
     'WikiProject Role-playing games': 'games',
     'WikiProject Rugby league':     'rugby league people',
